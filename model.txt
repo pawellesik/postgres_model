@@ -1,0 +1,141 @@
+CREATE TABLE players(
+	id_db serial primary key,
+	id_txt text,
+	info JSON,
+	info_extend JSON,
+	datac_utw timestamp,
+	datac_mod timestamp);
+----------------------------------------------------------------------------------------
+CREATE TYPE my_type_players AS (
+    id_db  int,
+	info JSON,
+	info_extend JSON,
+	info_prof JSON
+);
+------------------------------------------------------------------------------------------	
+create or replace function fn_get_player_info (p_id_txt text, p_json_info json, p_json_info_extend json)
+returns   my_type_players
+language plpgsql
+as
+$$
+declare
+   result_record my_type_players;
+begin
+
+  SELECT id_db, info, info_extend,  info
+  INTO result_record.id_db, result_record.info, result_record.info_extend, result_record.info_prof
+  FROM players
+  WHERE id_txt = p_id_txt;
+  
+  if (result_record.id_db is null) then 
+  
+	  insert into players (id_txt, info, info_extend, datac_utw) values (p_id_txt, p_json_info, p_json_info_extend, now());
+	  
+		SELECT id_db, info, info_extend, info
+	  INTO result_record.id_db, result_record.info, result_record.info_extend, result_record.info_prof
+	  FROM players
+	  WHERE id_txt = p_id_txt;
+  end if;
+
+   result_record.info_prof =  jsonb_set(cast(result_record.info_prof  as jsonb), '{T}', '"R"', true);
+   result_record.info_prof =  jsonb_set(cast(result_record.info_prof  as jsonb), '{C}', '"PROF"', true);
+   
+    return result_record;
+	
+end;
+$$;
+  
+  
+select * from fn_get_player_info('102088747408673894478', '{"C": "CLI", "T": "T", "GC": 5, "ID": "111138543356264288040", "DIR": "TEST", "IMP": -30, "NICK": "Testowy Testowy", "CREDIT": 95}','{}');  
+------------------------------------------------------------------------------------------	
+create or replace function fn_set_player_info (p_id_db int, p_json_info json)
+returns boolean
+language plpgsql
+as
+$$
+declare
+begin
+
+p_json_info = jsonb_set(cast(p_json_info as jsonb), '{DIR}', '""', true);
+
+update players set 
+	info = p_json_info,
+	datac_mod = now()
+where id_db = p_id_db;
+
+return true;
+
+end;
+$$;
+
+select * from fn_set_player_info(29, '{"C": "CLI", "T": "T", "GC": 5, "ID": "111138543356264288040", "DIR": "TEST", "IMP": -30, "NICK": "Testowy Testowy", "CREDIT": 95}');
+------------------------------------------------------------------------------------------	
+create or replace function fn_set_player_info_extend (p_id_db int, p_json_info_extend json)
+returns boolean
+language plpgsql
+as
+$$
+declare
+v_imp integer;
+begin
+
+update players set 
+	info_extend = p_json_info_extend,
+	datac_mod = now()
+where id_db = p_id_db;
+
+return true;
+end;
+$$;
+------------------------------------------------------------------------------------------	
+create or replace function fn_set_player_escape (p_id_db int, p_json_info json)
+returns boolean
+language plpgsql
+as
+$$
+declare
+v_imp integer;
+v_gc integer;
+v_credit integer;
+v_esc integer; 
+begin
+
+v_imp := p_json_info::json->'IMP' ;	v_imp := v_imp - 30;
+v_gc := p_json_info::json->'GC' ;	v_gc := v_gc+1;
+v_credit := p_json_info::json->'CREDIT' ;	v_credit := v_credit-1;
+v_esc := p_json_info::json->'ESC' ;	v_esc := v_esc+1;
+
+p_json_info = jsonb_set(cast(p_json_info as jsonb), '{DIR}', '""', true);
+p_json_info =  jsonb_set(cast(p_json_info as jsonb), '{IMP}', to_jsonb(v_imp), true);
+p_json_info =  jsonb_set(cast(p_json_info as jsonb), '{GC}', to_jsonb(v_gc), true);
+p_json_info =  jsonb_set(cast(p_json_info as jsonb), '{CREDIT}', to_jsonb(v_credit), true);
+p_json_info =  jsonb_set(cast(p_json_info as jsonb), '{ESC}', to_jsonb(v_esc), true);
+
+update players set 
+	info = p_json_info,
+	datac_mod = now()
+where id_db = p_id_db;
+
+return true;
+
+end;
+$$;
+------------------------------------------------------------------------------------------	
+create or replace view v_players as 
+select id_db, 
+		   id_txt,  
+     	   info::json->'NICK'  as NICK,
+	       info::json->'IMP'  as IMP,
+           info::json->'GC'  as GC,
+		   info::json->'ESC'  as ESC, 
+           info::json->'DIR'  as DIR, 
+           info::json->'CREDIT'  as CREDIT, 
+		   info_extend::json->'DESC'  as DESC, 
+		   info_extend::json->'SEX'  as SEX, 
+		   info_extend::json->'BIRTHDATE'  as BIRTHDATE,
+		   datac_utw,
+		   datac_mod
+ from players ;
+
+
+
