@@ -47,7 +47,57 @@ $$;
   
   
 select * from fn_get_player_info('102088747408673894478', '{"C": "CLI", "T": "T", "GC": 5, "ID": "111138543356264288040", "DIR": "TEST", "IMP": -30, "NICK": "Testowy Testowy", "CREDIT": 95}','{}');  
-------------------------------------------------------------------------------------------	
+----------------------
+--tymczasowo loguje zalogowania do logs, byc moze tak zostawie
+CREATE TABLE logs(
+	id_db integer,
+	count integer,
+	datac_mod timestamp);
+
+--------
+
+create or replace function fn_get_player_info (p_id_txt text, p_json_info json, p_json_info_extend json)
+returns   my_type_players
+language plpgsql
+as
+$$
+declare
+   result_record my_type_players;
+   v_count integer;
+begin
+
+  SELECT id_db, info, info_extend,  info
+  INTO result_record.id_db, result_record.info, result_record.info_extend, result_record.info_prof
+  FROM players
+  WHERE id_txt = p_id_txt;
+  
+  if (result_record.id_db is null) then 
+  
+	  insert into players (id_txt, info, info_extend, datac_utw) values (p_id_txt, p_json_info, p_json_info_extend, now());
+	  
+		SELECT id_db, info, info_extend, info
+	  INTO result_record.id_db, result_record.info, result_record.info_extend, result_record.info_prof
+	  FROM players
+	  WHERE id_txt = p_id_txt;
+  end if;
+
+   result_record.info_prof =  jsonb_set(cast(result_record.info_prof  as jsonb), '{T}', '"R"', true);
+   result_record.info_prof =  jsonb_set(cast(result_record.info_prof  as jsonb), '{C}', '"PROF"', true);
+   
+  select count(1) into v_count
+from logs where id_db = result_record.id_db;
+  if v_count = 0 then 
+  	insert into logs values (result_record.id_db, 1 , now());
+  else
+  	update logs set datac_mod = now(), count = count + 1;
+  end if;
+ 
+    return result_record;
+	
+end;
+$$;
+  
+--------------------------------------------------------------------	
 create or replace function fn_set_player_info (p_id_db int, p_json_info json)
 returns boolean
 language plpgsql
@@ -136,6 +186,52 @@ select id_db,
 		   datac_utw,
 		   datac_mod
  from players ;
+--------------------------------------------------------------------------------------------------
+create or replace function fn_set_player_imp (p_id_db int, p_new_imp int)
+returns boolean
+language plpgsql
+as
+$$
+declare
+v_json_info json;
+begin
 
+select info into v_json_info from players where id_db = p_id_db;
 
+v_json_info =  jsonb_set(cast(v_json_info as jsonb), '{IMP}', to_jsonb(p_new_imp), true);
 
+update players set 
+	info = v_json_info,
+	datac_mod = now()
+where id_db = p_id_db;
+
+return true;
+
+end;
+$$;
+---------------------------------------------------------------------------
+select fn_set_player_imp(11,102);
+---------------------------------------------------------------------------
+CREATE TABLE games(
+	datac_from timestamp,
+	datac_to timestamp,
+	game_count int);
+---------------------------------------------------------------------------
+create or replace function fn_save_game_count (date_from text, date_to text, gameCount int)
+returns boolean
+language plpgsql
+as
+$$
+declare
+begin
+
+insert into games values 
+(TO_TIMESTAMP(date_from, 'YYYY-MM-DD HH24:MI:SS'),
+ TO_TIMESTAMP(date_to, 'YYYY-MM-DD HH24:MI:SS'),
+ gameCount);
+
+return true;
+
+end;
+$$;
+---------------------------------------------------------------------------
